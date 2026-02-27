@@ -249,6 +249,7 @@ pub const usage =
     \\                          Do not search the standard system directories or compiler builtin directories for include files.
     \\  -nostdlibinc            Do not search the standard system directories for include files, but do search compiler builtin include directories
     \\  -o <file>               Write output to <file>
+    \\  -ObjC                   Enable experimental Objective-C support (requires -fexperimental-objective-c)
     \\  -pedantic               Warn on language extensions
     \\  -pedantic-errors        Error on language extensions
     \\  --rtlib=<arg>           Compiler runtime library to use (libgcc or compiler-rt)
@@ -351,6 +352,8 @@ pub fn parseArgs(
                 try macro_buf.print(gpa, "#undef {s}\n", .{macro});
             } else if (mem.eql(u8, arg, "-O")) {
                 d.comp.code_gen_options.optimization_level = .@"1";
+            } else if (mem.eql(u8, arg, "-ObjC")) {
+                d.comp.langopts.objective_c = true;
             } else if (mem.startsWith(u8, arg, "-O")) {
                 d.comp.code_gen_options.optimization_level = backend.CodeGenOptions.OptimizationLevel.fromString(arg["-O".len..]) orelse {
                     try d.err("invalid optimization level '{s}'", .{arg});
@@ -858,6 +861,20 @@ pub fn parseArgs(
                 d.comp.langopts.blocks = true;
             } else if (mem.eql(u8, arg, "-fno-blocks")) {
                 d.comp.langopts.blocks = false;
+            } else if (mem.startsWith(u8, arg, "-fobjc-abi-version")) {
+                const rest = arg["-fobjc-abi-version".len..];
+                if (!mem.eql(u8, rest, "=3")) {
+                    return d.fatal("unsupported objective-c abi version: {s}", .{arg});
+                }
+            } else if (mem.eql(u8, arg, "-fobjc-fragile-abi")) {
+                return d.fatal("only objective-c nonfragile abi supported", .{});
+            } else if (mem.eql(u8, arg, "-fobjc-nonfragile-abi")) {
+                // do nothing
+            } else if (mem.startsWith(u8, arg, "-fobjc-nonfragile-abi-version")) {
+                const rest = arg["-fobjc-nonfragile-abi-version".len..];
+                if (!mem.eql(u8, rest, "=2")) {
+                    return d.fatal("objective-c nonfragile abi version not supported: {s}", .{arg});
+                }
             } else {
                 try d.warn("unknown argument '{s}'", .{arg});
             }
@@ -876,6 +893,16 @@ pub fn parseArgs(
             d.comp.darwin_target_variant = try d.parseTarget(darwin_triple, null);
         }
         d.comp.langopts.setTargetOptions(d.comp.target);
+    }
+    if (d.comp.langopts.objective_c) {
+        if (!d.comp.target.os.tag.isDarwin()) return d.fatal("-ObjC is only supported on Darwin targets", .{});
+        if (emulate != .clang) {
+            if (emulate == null)
+                try d.warn("-ObjC currently implies --emulate=clang", .{})
+            else
+                return d.fatal("-ObjC requires clang emulation", .{});
+            emulate = .clang;
+        }
     }
     if (emulate != null or d.raw_target_triple != null) {
         d.comp.langopts.setEmulatedCompiler(emulate orelse d.comp.target.systemCompiler());
