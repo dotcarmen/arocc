@@ -105,10 +105,19 @@ fn runCaseExtra(
     aro_exe: []const u8,
     stats: *Stats,
 ) !void {
-    if (!mem.endsWith(u8, path, ".c")) {
-        print("test case is not a .c file: '{s}'\n", .{path});
+    const basename = std.fs.path.basename(path);
+    const is_objc = mem.endsWith(u8, path, ".m");
+    if (is_objc) {
+        if (@import("builtin").target.os.tag != .macos) {
+            print("{s}: TODO objc tests on non-macos platform\n", .{basename});
+            _ = @atomicRmw(u32, &stats.skipped, .Add, 1, .monotonic);
+            return;
+        }
+    } else if (!mem.endsWith(u8, path, ".c")) {
+        print("test case with unexpected extension: '{s}'\n", .{basename});
         return error.InvalidName;
     }
+
     const cases_dir = std.fs.path.dirname(path) orelse ".";
     const case = try caseFromFile(io, arena, path);
 
@@ -124,9 +133,12 @@ fn runCaseExtra(
         },
     };
 
+    const objc_args = [_][]const u8{ "--emulate=clang", "-ObjC" };
+
     var args: std.ArrayList([]const u8) = .empty;
-    try args.ensureUnusedCapacity(arena, base_args.len + kind_args.len + case.args.len);
+    try args.ensureUnusedCapacity(arena, base_args.len + objc_args.len + kind_args.len + case.args.len);
     args.appendSliceAssumeCapacity(&base_args);
+    if (is_objc) args.appendSliceAssumeCapacity(&objc_args);
     args.appendSliceAssumeCapacity(kind_args);
     args.appendSliceAssumeCapacity(case.args);
 
