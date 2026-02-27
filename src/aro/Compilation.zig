@@ -1195,6 +1195,23 @@ fn generateSystemDefines(comp: *Compilation, w: *Io.Writer) !void {
         try w.print("#define __BLOCKS__ 1\n", .{});
         try w.print("#define __block __attribute__((__blocks__(byref)))\n", .{});
     }
+
+    if (comp.langopts.objective_c) {
+        // following macros found from `echo | clang -dM -E -ObjC -`
+        // note: OBJC_TYPES_DEFINED and OBJC_API_VERSION not defined with Darwin clang 17.0.0+
+        try w.print(
+            \\#define __OBJC__ 1
+            \\#define __OBJC2__ 1
+            \\#define __OBJC_BOOL_IS_BOOL 1
+            //#define OBJC_NEW_PROPERTIES 1
+            //#define OBJC_ZEROCOST_EXCEPTIONS 1
+            //#define __autoreleasing __attribute((objc_ownership(autoreleasing)))
+            //#define __strong __attribute((objc_ownership(strong)))
+            //#define __unsafe_unretained __attribute((objc_ownership(none)))
+            //#define __weak __attribute((objc_ownership(weak)))
+            \\
+        , .{});
+    }
 }
 
 const RiscvFloatAbi = enum { soft, single, double };
