@@ -161,6 +161,8 @@ default_symbol_visibility: std.builtin.SymbolVisibility = .default,
 
 blocks: bool = false,
 
+objective_c: bool = false,
+
 pub fn setStandard(self: *LangOpts, name: []const u8) error{InvalidStandard}!void {
     self.standard = Standard.NameMap.get(name) orelse return error.InvalidStandard;
 }

@@ -364,6 +364,9 @@ pub const Token = struct {
         /// Blocks extension
         keyword_block,
 
+        /// Objective-c
+        keyword_objc,
+
         /// Return true if token is identifier or keyword.
         pub fn isMacroIdentifier(id: Id) bool {
             switch (id) {
@@ -515,6 +518,7 @@ pub const Token = struct {
                 .keyword_dfloat128,
                 .keyword_dfloat64x,
                 .keyword_block,
+                .keyword_objc,
                 => return true,
                 else => return false,
             }
@@ -799,6 +803,7 @@ pub const Token = struct {
                 .keyword_nullable_result => "_Nullable_result",
                 .keyword_null_unspecified => "_Null_unspecified",
                 .keyword_block => "__block",
+                .keyword_objc => "__OBJC__",
             };
         }
 
@@ -1131,6 +1136,9 @@ pub const Token = struct {
 
         // Blocks extension
         .{ "__block", .keyword_block },
+
+        // Objective-C
+        .{ "__OBJC__", .keyword_objc },
     });
 };
 
