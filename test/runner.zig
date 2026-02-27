@@ -1,3 +1,6 @@
+// TODO: don't depend on test platform. only used for objective-c for now
+const target = @import("builtin").target;
+
 const std = @import("std");
 const Io = std.Io;
 const mem = std.mem;
@@ -105,10 +108,18 @@ fn runCaseExtra(
     aro_exe: []const u8,
     stats: *Stats,
 ) !void {
-    if (!mem.endsWith(u8, path, ".c")) {
-        print("test case is not a .c file: '{s}'\n", .{path});
+    const is_objc = mem.endsWith(u8, path, ".m");
+    if (is_objc) {
+        // TODO: run objc tests on non-macos targets
+        if (@import("builtin").target.os.tag != .macos) {
+            print("TODO: skipping objc test on non-macos platform\n", .{});
+            return;
+        }
+    } else if (!mem.endsWith(u8, path, ".c") and !is_objc) {
+        print("test case with unexpected extension: '{s}'\n", .{path});
         return error.InvalidName;
     }
+
     const cases_dir = std.fs.path.dirname(path) orelse ".";
     const case = try caseFromFile(io, arena, path);
 
@@ -124,9 +135,13 @@ fn runCaseExtra(
         },
     };
 
+    // TODO: objc files require `--emulate=clang`. `-ObjC` is implied with `--emulate=clang` targeting darwin
+    const objc_args = [_][]const u8{ "--emulate=clang", "-ObjC" };
+
     var args: std.ArrayList([]const u8) = .empty;
-    try args.ensureUnusedCapacity(arena, base_args.len + kind_args.len + case.args.len);
+    try args.ensureUnusedCapacity(arena, base_args.len + objc_args.len + kind_args.len + case.args.len);
     args.appendSliceAssumeCapacity(&base_args);
+    if (is_objc) args.appendSliceAssumeCapacity(&objc_args);
     args.appendSliceAssumeCapacity(kind_args);
     args.appendSliceAssumeCapacity(case.args);
 

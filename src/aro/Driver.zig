@@ -174,6 +174,7 @@ pub const usage =
     \\  -P, --no-line-commands  Disable linemarker output in -E mode
     \\
     \\Compile options:
+    \\  -ObjC                   Enable experimental Objective-C support
     \\  -c, --compile           Only run preprocess, compile, and assemble steps
     \\  -darwin-target-variant-triple
     \\                          Specify the darwin target variant triple
@@ -351,6 +352,8 @@ pub fn parseArgs(
                 try macro_buf.print(gpa, "#undef {s}\n", .{macro});
             } else if (mem.eql(u8, arg, "-O")) {
                 d.comp.code_gen_options.optimization_level = .@"1";
+            } else if (mem.eql(u8, arg, "-ObjC")) {
+                d.comp.langopts.objective_c = true;
             } else if (mem.startsWith(u8, arg, "-O")) {
                 d.comp.code_gen_options.optimization_level = backend.CodeGenOptions.OptimizationLevel.fromString(arg["-O".len..]) orelse {
                     try d.err("invalid optimization level '{s}'", .{arg});
@@ -854,6 +857,20 @@ pub fn parseArgs(
                 d.comp.langopts.blocks = true;
             } else if (mem.eql(u8, arg, "-fno-blocks")) {
                 d.comp.langopts.blocks = false;
+            } else if (mem.startsWith(u8, arg, "-fobjc-abi-version")) {
+                const rest = arg["-fobjc-abi-version".len..];
+                if (!mem.eql(u8, rest, "=3")) {
+                    return d.fatal("unsupported objective-c abi version: {s}", .{arg});
+                }
+            } else if (mem.eql(u8, arg, "-fobjc-fragile-abi")) {
+                return d.fatal("only objective-c nonfragile abi supported", .{});
+            } else if (mem.eql(u8, arg, "-fobjc-nonfragile-abi")) {
+                // do nothing
+            } else if (mem.startsWith(u8, arg, "-fobjc-nonfragile-abi-version")) {
+                const rest = arg["-fobjc-nonfragile-abi-version".len..];
+                if (!mem.eql(u8, rest, "=2")) {
+                    return d.fatal("objective-c nonfragile abi version not supported: {s}", .{arg});
+                }
             } else {
                 try d.warn("unknown argument '{s}'", .{arg});
             }
@@ -887,6 +904,11 @@ pub fn parseArgs(
             d.comp.langopts.blocks |= d.comp.target.isBlocksSupported();
         },
         else => {},
+    }
+    if (d.comp.langopts.objective_c) {
+        // TODO: when objc support is more stable, automatically enable -ObjC on Darwin targets
+        if (!d.comp.target.os.tag.isDarwin()) return d.fatal("-ObjC is only supported on Darwin targets", .{});
+        if (emulate != .clang) return d.fatal("-ObjC requires explicit --emulate=clang", .{});
     }
     if (d.comp.langopts.preserve_comments and !d.only_preprocess) {
         return d.fatal("invalid argument '{s}' only allowed with '-E'", .{comment_arg});

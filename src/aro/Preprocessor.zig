@@ -390,6 +390,16 @@ pub fn addBuiltinMacros(pp: *Preprocessor) !void {
     if (pp.comp.langopts.blocks) {
         try pp.addBuiltinMacro("__BLOCKS__", .defined);
     }
+
+    if (pp.comp.langopts.objective_c) {
+        // following macros found from `echo | clang -dM -E -ObjC -`
+        try pp.addBuiltinMacro("__OBJC__", .defined);
+        try pp.addBuiltinMacro("__OBJC2__", .defined);
+        try pp.addBuiltinMacro("__OBJC_BOOL_IS_BOOL", .defined);
+        try pp.addBuiltinMacro("OBJC_NEW_PROPERTIES", .defined);
+        try pp.addBuiltinMacro("OBJC_ZEROCOST_EXCEPTIONS", .defined);
+        // note: OBJC_TYPES_DEFINED and OBJC_API_VERSION not defined with Darwin clang 17.0.0+
+    }
 }
 
 pub fn deinit(pp: *Preprocessor) void {
