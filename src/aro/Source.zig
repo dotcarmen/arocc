@@ -47,6 +47,25 @@ pub const ExpandedLocation = struct {
     kind: Kind,
 };
 
+pub const Language = enum {
+    c,
+    @"c-header",
+    @"objective-c",
+    @"objective-c-header",
+    pp,
+
+    pub fn fromPathExt(path: []const u8) ?Language {
+        return if (std.mem.endsWith(u8, path, ".h"))
+            .@"c-header"
+        else if (std.mem.endsWith(u8, path, ".c"))
+            .c
+        else if (std.mem.endsWith(u8, path, ".m"))
+            .@"objective-c"
+        else
+            null;
+    }
+};
+
 const Source = @This();
 
 path: []const u8,
@@ -57,6 +76,7 @@ id: Id,
 /// consecutive splices happened. Guaranteed to be non-decreasing
 splice_locs: []const u32,
 kind: Kind,
+language: ?Language = null,
 
 pub fn lineCol(source: Source, loc: Location) ExpandedLocation {
     var start: usize = 0;

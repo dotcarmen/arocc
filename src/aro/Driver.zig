@@ -312,6 +312,8 @@ pub fn parseArgs(
     var strip = true;
     var debug: ?backend.CodeGenOptions.DebugFormat = null;
     var emulate: ?LangOpts.Compiler = null;
+    var language: ?union(enum) { lang: Source.Language, none } = null;
+
     while (i < args.len) : (i += 1) {
         const arg = args[i];
         if (arg.len > 1 and arg[0] == '-') {
@@ -836,9 +838,11 @@ pub fn parseArgs(
                     }
                     lang = args[i];
                 }
-                if (!mem.eql(u8, lang, "none") and !mem.eql(u8, lang, "c")) {
-                    try d.err("language not recognized: '{s}'", .{lang});
-                }
+                if (mem.eql(u8, arg, "none")) {
+                    language = null;
+                } else language = .{ .lang = std.meta.stringToEnum(Source.Language, lang) orelse {
+                    return d.fatal("language not recognized: '{s}'", .{lang});
+                } };
             } else if (mem.startsWith(u8, arg, "-flto")) {
                 const rest = arg["-flto".len..];
                 if (rest.len == 0 or
@@ -874,11 +878,27 @@ pub fn parseArgs(
             } else {
                 try d.warn("unknown argument '{s}'", .{arg});
             }
-        } else if (std.mem.endsWith(u8, arg, ".o") or std.mem.endsWith(u8, arg, ".obj")) {
+        } else if ((language != null and language.? != .none) or
+            std.mem.endsWith(u8, arg, ".o") or
+            std.mem.endsWith(u8, arg, ".obj"))
+        {
             try d.link_objects.append(gpa, arg);
         } else {
-            const source = d.addSource(arg) catch |er| {
-                return d.fatal("unable to add source file '{s}': {s}", .{ arg, errorDescription(er) });
+            const source = d.addSource(arg, if (language) |lang| lang.lang else null) catch |er| {
+                return d.fatal("unable to add {s} file '{s}': {s}", .{
+                    if (language) |lang| switch (lang) {
+                        .none => "object ",
+                        .lang => |l| switch (l) {
+                            .c => "C source",
+                            .@"c-header" => "C Header source",
+                            .@"objective-c" => "Objective-C source",
+                            .@"objective-c-header" => "Objective-C Header source",
+                            .pp => unreachable,
+                        },
+                    } else "source",
+                    arg,
+                    errorDescription(er),
+                });
             };
             try d.inputs.append(gpa, source);
         }
@@ -957,11 +977,11 @@ fn option(arg: []const u8, name: []const u8) ?[]const u8 {
     return null;
 }
 
-fn addSource(d: *Driver, path: []const u8) !Source {
+fn addSource(d: *Driver, path: []const u8, specified_language: ?Source.Language) !Source {
     if (mem.eql(u8, "-", path)) {
-        return d.comp.addSourceFromFile(.stdin(), "<stdin>", .user);
+        return d.comp.addSourceFromFile(.stdin(), "<stdin>", .user, specified_language);
     }
-    return d.comp.addSourceFromPath(path);
+    return d.comp.addSourceFromPath(path, specified_language);
 }
 
 fn findIncludeCLI(d: *Driver, path: []const u8, kind: []const u8) !Source {
@@ -1223,7 +1243,7 @@ pub fn main(d: *Driver, tc: *Toolchain, args: []const []const u8, comptime fast_
         const contents = try macro_buf.toOwnedSlice(d.comp.gpa);
         errdefer d.comp.gpa.free(contents);
 
-        break :macros try d.comp.addSourceFromOwnedBuffer("<command line>", contents, .user);
+        break :macros try d.comp.addSourceFromOwnedBuffer("<command line>", contents, .user, .pp);
     };
 
     const linking = !(d.only_preprocess or d.only_syntax or d.only_compile or d.only_preprocess_and_compile);

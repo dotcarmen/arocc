@@ -2365,7 +2365,7 @@ test "Tokenizer fuzz test" {
 
             var buf: [256]u8 = undefined;
             const contents_len = smith.slice(&buf);
-            const source = try comp.addSourceFromBuffer("fuzz.c", buf[0..contents_len]);
+            const source = try comp.addSourceFromBuffer("fuzz.c", buf[0..contents_len], .c);
 
             var tokenizer: Tokenizer = .{
                 .buf = source.buf,
@@ -2390,7 +2390,7 @@ fn expectTokensExtra(contents: []const u8, expected_tokens: []const Token.Id, la
     if (langopts) |provided| {
         comp.langopts = provided;
     }
-    const source = try comp.addSourceFromBuffer("path", contents);
+    const source = try comp.addSourceFromBuffer("path", contents, null);
     var tokenizer: Tokenizer = .{
         .buf = source.buf,
         .source = source.id,

@@ -10973,7 +10973,7 @@ test "Node locations" {
         \\int bar = 10;
         \\int main(void) {}
         \\
-    );
+    , .c);
 
     const builtin_macros = try comp.generateBuiltinMacros(.no_system_defines);
 
