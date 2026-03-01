@@ -238,6 +238,7 @@ diagnostics: *Diagnostics,
 
 arena: std.heap.ArenaAllocator,
 defines: DefineMap = .empty,
+imports: std.StringHashMapUnmanaged(void) = .empty,
 /// Do not directly mutate this; use addToken / addTokenAssumeCapacity / ensureTotalTokenCapacity / ensureUnusedTokenCapacity
 tokens: Token.List = .empty,
 /// Do not directly mutate this; must be kept in sync with `tokens`
@@ -847,8 +848,19 @@ fn preprocessExtra(pp: *Preprocessor, source: Source) MacroError!TokenWithExpans
                         _ = pp.defines.orderedRemove(macro_name);
                         try pp.expectNl(&tokenizer);
                     },
+                    .keyword_import => {
+                        if (!pp.comp.langopts.objective_c) {
+                            // TODO: better diagnostic?
+                            try pp.err(directive_loc, .invalid_preprocessing_directive, .{});
+                            skipToNl(&tokenizer);
+                            continue;
+                        }
+
+                        try pp.include(&tokenizer, .first, .import);
+                        continue;
+                    },
                     .keyword_include => {
-                        try pp.include(&tokenizer, .first);
+                        try pp.include(&tokenizer, .first, .include);
                         continue;
                     },
                     .keyword_include_next => {
@@ -856,9 +868,9 @@ fn preprocessExtra(pp: *Preprocessor, source: Source) MacroError!TokenWithExpans
 
                         if (pp.include_depth == 0) {
                             try pp.err(directive_loc, .include_next_outside_header, .{});
-                            try pp.include(&tokenizer, .first);
+                            try pp.include(&tokenizer, .first, .include);
                         } else {
-                            try pp.include(&tokenizer, .next);
+                            try pp.include(&tokenizer, .next, .include);
                         }
                     },
                     .keyword_embed => try pp.embed(&tokenizer),
@@ -3532,7 +3544,7 @@ fn embed(pp: *Preprocessor, tokenizer: *Tokenizer) MacroError!void {
 }
 
 // Handle a #include directive.
-fn include(pp: *Preprocessor, tokenizer: *Tokenizer, which: Compilation.WhichInclude) MacroError!void {
+fn include(pp: *Preprocessor, tokenizer: *Tokenizer, which: Compilation.WhichInclude, kind: enum { import, include }) MacroError!void {
     const first = tokenizer.nextNoWS();
     const new_source = findIncludeSource(pp, tokenizer, first, which) catch |er| switch (er) {
         error.InvalidInclude => return,
@@ -3547,6 +3559,14 @@ fn include(pp: *Preprocessor, tokenizer: *Tokenizer, which: Compilation.WhichInc
         const loc: Source.Location = .{ .id = first.source, .byte_offset = first.start, .line = first.line };
         try pp.err(loc, .too_many_includes, .{});
         return error.StopPreprocessing;
+    }
+
+    // `#import` works as if include guards were defined, but without the actual include guards
+    // since file paths can't be valid macro identifiers, check to see if the file path is a define
+    if (kind == .import) {
+        const gop = try pp.imports.getOrPut(pp.comp.gpa, new_source.path);
+        if (gop.found_existing) return;
+        gop.key_ptr.* = new_source.path;
     }
 
     if (pp.include_guards.get(new_source.id)) |guard| {
@@ -4101,6 +4121,7 @@ test "Include guards" {
                 .keyword_pragma,
                 .keyword_line,
                 .keyword_endif,
+                .keyword_import,
                 => false,
                 else => unreachable,
             };

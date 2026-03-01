@@ -14,10 +14,13 @@
 #  endif
 #endif // __OBJC__
 
+#import <SimpleFramework/AssertNotDoubleIncluded.h>
+#import <SimpleFramework/AssertNotDoubleIncluded.h>
+
 /** manifest:
 syntax
-args = -Wpedantic --target=aarch64-macos --emulate=clang -ObjC
+args = -Wpedantic --target=aarch64-macos --emulate=clang -ObjC -F frameworks
 
 objc.m:2:4: error: oops
-objc.m:24:1: warning: ISO C requires a translation unit to contain at least one declaration [-Wempty-translation-unit]
+objc.m:27:1: warning: ISO C requires a translation unit to contain at least one declaration [-Wempty-translation-unit]
 */
