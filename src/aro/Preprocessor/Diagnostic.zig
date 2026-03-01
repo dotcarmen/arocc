@@ -493,3 +493,10 @@ pub const include_level_is_clang_extension: Diagnostic = .{
     .kind = .off,
     .extension = true,
 };
+
+pub const import_directive_is_objective_c_feature: Diagnostic = .{
+    .fmt = "import directive is an Objective-C feature",
+    .kind = .off,
+    .extension = true,
+    .opt = .@"objc-import",
+};

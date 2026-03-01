@@ -204,6 +204,7 @@ pub const Option = enum {
     @"base-file-extension",
     @"include-level-extension",
     @"blocks-extension",
+    @"objc-import",
 
     /// GNU extensions
     pub const gnu = [_]Option{
@@ -241,6 +242,10 @@ pub const Option = enum {
         .@"microsoft-anon-tag",
     };
 
+    pub const @"objective-c" = [_]Option{
+        .@"objc-import",
+    };
+
     pub const extra = [_]Option{
         .@"initializer-overrides",
         .@"ignored-qualifiers",
@@ -271,7 +276,7 @@ pub const Option = enum {
         .@"unknown-pragmas",
     };
 
-    pub const all = most ++ [_]Option{
+    pub const all = most ++ @"objective-c" ++ [_]Option{
         .nonnull,
         .@"unreachable-code",
         .@"malformed-warning-check",
