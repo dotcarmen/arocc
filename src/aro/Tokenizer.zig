@@ -371,6 +371,7 @@ pub const Token = struct {
         /// Objective-c
         keyword_import,
         keyword_objc,
+        keyword_selector,
 
         /// Return true if token is identifier or keyword.
         pub fn isMacroIdentifier(id: Id) bool {
@@ -814,6 +815,7 @@ pub const Token = struct {
                 .keyword_class => "class",
                 .keyword_import => "import",
                 .keyword_objc => "__OBJC__",
+                .keyword_selector => "selector",
             };
         }
 
@@ -1154,6 +1156,7 @@ pub const Token = struct {
         // Objective-C
         .{ "import", .keyword_import },
         .{ "__OBJC__", .keyword_objc },
+        .{ "selector", .keyword_selector },
     });
 };
 
