@@ -369,6 +369,7 @@ pub const Token = struct {
         keyword_class,
 
         /// Objective-c
+        keyword_id,
         keyword_import,
         keyword_objc,
         keyword_selector,
@@ -813,6 +814,7 @@ pub const Token = struct {
                 .keyword_null_unspecified => "_Null_unspecified",
                 .keyword_block => "__block",
                 .keyword_class => "class",
+                .keyword_id => "id",
                 .keyword_import => "import",
                 .keyword_objc => "__OBJC__",
                 .keyword_selector => "selector",
@@ -980,6 +982,10 @@ pub const Token = struct {
             .keyword_dfloat128,
             .keyword_dfloat64x,
             => if (langopts.emulate == .clang) .identifier else kw,
+
+            .keyword_id,
+            => if (langopts.objective_c) kw else .identifier,
+
             else => kw,
         };
     }
@@ -1154,6 +1160,7 @@ pub const Token = struct {
         .{ "class", .keyword_class },
 
         // Objective-C
+        .{ "id", .keyword_id },
         .{ "import", .keyword_import },
         .{ "__OBJC__", .keyword_objc },
         .{ "selector", .keyword_selector },

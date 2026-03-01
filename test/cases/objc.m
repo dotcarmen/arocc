@@ -19,6 +19,10 @@
 
 @class MyClass;
 
+int main() {
+  id x = 0;
+}
+
 /** manifest:
 syntax
 args = -Wpedantic --target=aarch64-macos --emulate=clang -ObjC -F frameworks
