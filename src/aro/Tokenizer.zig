@@ -366,6 +366,9 @@ pub const Token = struct {
         /// leading character of the following identifier token.
         incomplete_ucn,
 
+        /// Objective-c
+        keyword_import,
+
         /// Return true if token is identifier or keyword.
         pub fn isMacroIdentifier(id: Id) bool {
             switch (id) {
@@ -548,6 +551,7 @@ pub const Token = struct {
                 .keyword_line,
                 .keyword_va_args,
                 .keyword_va_opt,
+                .keyword_import,
                 => id.* = .identifier,
                 .keyword_defined => if (defined_to_identifier) {
                     id.* = .identifier;
@@ -809,6 +813,7 @@ pub const Token = struct {
                 .keyword_nullable => "_Nullable",
                 .keyword_nullable_result => "_Nullable_result",
                 .keyword_null_unspecified => "_Null_unspecified",
+                .keyword_import => "import",
             };
         }
 
@@ -1145,6 +1150,9 @@ pub const Token = struct {
         .{ "_Nullable", .keyword_nullable },
         .{ "_Nullable_result", .keyword_nullable_result },
         .{ "_Null_unspecified", .keyword_null_unspecified },
+
+        // Objective-C
+        .{ "import", .keyword_import },
     });
 };
 

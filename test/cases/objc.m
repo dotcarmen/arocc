@@ -14,12 +14,14 @@
 #error TODO: OBJC_ZEROCOST_EXCEPTIONS
 #endif
 
+#import <SimpleFramework/AssertNotDoubleIncluded.h>
+#import <SimpleFramework/AssertNotDoubleIncluded.h>
 
 /** manifest:
 syntax
-args = -Wpedantic
+args = -Wpedantic -F frameworks
 
 objc.m:11:2: error: TODO: OBJC_NEW_PROPERTIES
 objc.m:14:2: error: TODO: OBJC_ZEROCOST_EXCEPTIONS
-objc.m:26:1: warning: ISO C requires a translation unit to contain at least one declaration
+objc.m:28:1: warning: ISO C requires a translation unit to contain at least one declaration
 */
