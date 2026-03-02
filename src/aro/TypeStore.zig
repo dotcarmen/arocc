@@ -51,6 +51,7 @@ const Repr = struct {
         typedef,
         attributed,
         attributed_one,
+        objc_class,
     };
 };
 
@@ -408,6 +409,9 @@ pub const QualType = packed struct(u32) {
                 .base = @bitCast(repr.data[0]),
                 .attributes = comp.type_store.attributes.items[repr.data[1]..][0..1],
             } },
+            .objc_class => .{ .objc_class = .{
+                .name = @enumFromInt(repr.data[0]),
+            } },
         };
     }
 
@@ -538,6 +542,7 @@ pub const QualType = packed struct(u32) {
             .typeof => unreachable,
             .typedef => unreachable,
             .attributed => unreachable,
+            .objc_class => null,
         };
     }
 
@@ -663,7 +668,7 @@ pub const QualType = packed struct(u32) {
             .atomic => |atomic| continue :loop atomic.base(comp).type,
             .complex => |complex| continue :loop complex.base(comp).type,
 
-            .pointer, .nullptr_t, .block => switch (comp.target.cpu.arch) {
+            .pointer, .nullptr_t, .block, .objc_class => switch (comp.target.cpu.arch) {
                 .avr => 1,
                 else => comp.target.ptrBitWidth() / 8,
             },
@@ -1148,6 +1153,12 @@ pub const QualType = packed struct(u32) {
             .typeof => unreachable, // Never returned from base()
             .typedef => unreachable, // Never returned from base()
             .attributed => unreachable, // Never returned from base()
+
+            .objc_class => |a_class| {
+                const b_class = b_type.objc_class;
+                _ = .{ a_class, b_class }; // TODO: figure out exactly what to do here
+                return false; // TODO: only `@class NAME;` is supported at the moment
+            },
         }
     }
 
@@ -1404,6 +1415,11 @@ pub const QualType = packed struct(u32) {
             } else {
                 try w.print("enum {s}", .{enum_ty.name.lookup(comp)});
             },
+
+            .objc_class => |class| {
+                // TODO: don't print `@class`, since it's not actually a type
+                try w.print("@class {s};", .{class.name.lookup(comp)});
+            },
         }
         return true;
     }
@@ -1581,6 +1597,8 @@ pub const Type = union(enum) {
     typeof: TypeOf,
     typedef: TypeDef,
     attributed: Attributed,
+
+    objc_class: ObjcClass,
 
     pub const Int = enum {
         char,
@@ -1850,6 +1868,10 @@ pub const Type = union(enum) {
     pub const Attributed = struct {
         base: QualType,
         attributes: []const Attribute,
+    };
+
+    pub const ObjcClass = struct {
+        name: StringId,
     };
 };
 
@@ -2145,6 +2167,10 @@ pub fn set(ts: *TypeStore, gpa: std.mem.Allocator, ty: Type, index: usize) !void
                 repr.tag = .attributed_one;
                 repr.data[1] = attr_index;
             }
+        },
+        .objc_class => |class| {
+            repr.tag = .objc_class;
+            repr.data[0] = @intFromEnum(class.name);
         },
     }
     ts.types.set(index, repr);

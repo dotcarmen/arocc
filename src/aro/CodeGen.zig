@@ -175,6 +175,7 @@ fn genType(c: *CodeGen, qt: QualType) !Interner.Ref {
             return c.fail("TODO lower nullptr_t", .{});
         },
         .attributed, .typeof, .typedef => unreachable,
+        .objc_class => return c.fail("TODO lower objc types", .{}),
     };
     return c.builder.interner.put(c.builder.gpa, key);
 }

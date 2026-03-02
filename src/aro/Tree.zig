@@ -284,6 +284,8 @@ pub const Node = union(enum) {
     /// Inserted in record and scalar initializers for unspecified elements.
     default_init_expr: DefaultInit,
 
+    objc_class_forward_decl: ObjcClassForwardDecl,
+
     pub const EmptyDecl = struct {
         semicolon: TokenIndex,
     };
@@ -734,6 +736,10 @@ pub const Node = union(enum) {
     pub const DefaultInit = struct {
         last_tok: TokenIndex,
         qt: QualType,
+    };
+
+    pub const ObjcClassForwardDecl = struct {
+        name: TokenIndex,
     };
 
     pub const Index = enum(u32) {
@@ -1786,6 +1792,11 @@ pub const Node = union(enum) {
                         },
                     };
                 },
+                .objc_class_forward_decl => .{
+                    .objc_class_forward_decl = .{
+                        .name = node_tok,
+                    },
+                },
             };
         }
 
@@ -2007,6 +2018,7 @@ pub const Node = union(enum) {
             default_init_expr,
             compound_literal_expr,
             block_literal,
+            objc_class_forward_decl,
         };
     };
 
@@ -2891,6 +2903,10 @@ pub fn setNode(tree: *Tree, node: Node, index: usize) !void {
             });
             repr.data[2] = @intFromEnum(literal.initializer);
             repr.tok = literal.l_paren_tok;
+        },
+        .objc_class_forward_decl => |class| {
+            repr.tag = .objc_class_forward_decl;
+            repr.tok = class.name;
         },
     }
     tree.nodes.set(index, repr);
@@ -3837,6 +3853,7 @@ fn dumpNode(
         .default_init_expr,
         .cond_dummy_expr,
         .compound_assign_dummy_expr,
+        .objc_class_forward_decl,
         => {},
     }
 }

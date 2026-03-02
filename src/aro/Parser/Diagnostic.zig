@@ -2603,3 +2603,23 @@ pub const block_defined_here: Diagnostic = .{
     .fmt = "block defined here",
     .kind = .note,
 };
+
+pub const objc_not_enabled: Diagnostic = .{
+    .fmt = "Objective-C is not enabled",
+    .kind = .@"fatal error",
+};
+
+pub const unexpected_objc_directive: Diagnostic = .{
+    .fmt = "unexpected Objective-C directive",
+    .kind = .@"error",
+};
+
+pub const objc_type_decl_conflicts_with_defined_type: Diagnostic = .{
+    .fmt = "@{s} {s} conflicts with already-defined type",
+    .kind = .@"error",
+};
+
+pub const type_defined_here: Diagnostic = .{
+    .fmt = "type defined here",
+    .kind = .note,
+};

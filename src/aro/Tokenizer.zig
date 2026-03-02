@@ -143,6 +143,7 @@ pub const Token = struct {
         tilde,
         hash,
         hash_hash,
+        at,
 
         /// Special token for handling expansion of parameters to builtin preprocessor functions
         macro_param_builtin_func,
@@ -363,6 +364,9 @@ pub const Token = struct {
 
         /// Blocks extension
         keyword_block,
+
+        /// generic non-C keywords
+        keyword_class,
 
         /// Objective-c
         keyword_import,
@@ -662,6 +666,7 @@ pub const Token = struct {
                 .tilde => "~",
                 .hash => "#",
                 .hash_hash => "##",
+                .at => "@",
 
                 .keyword_auto => "auto",
                 .keyword_auto_type => "__auto_type",
@@ -806,6 +811,7 @@ pub const Token = struct {
                 .keyword_nullable_result => "_Nullable_result",
                 .keyword_null_unspecified => "_Null_unspecified",
                 .keyword_block => "__block",
+                .keyword_class => "class",
                 .keyword_import => "import",
                 .keyword_objc => "__OBJC__",
             };
@@ -873,6 +879,7 @@ pub const Token = struct {
                 .pp_num,
                 .keyword_true,
                 .keyword_false,
+                .at,
                 => true,
                 else => false,
             };
@@ -1141,6 +1148,9 @@ pub const Token = struct {
         // Blocks extension
         .{ "__block", .keyword_block },
 
+        // generic non-C keywords
+        .{ "class", .keyword_class },
+
         // Objective-C
         .{ "import", .keyword_import },
         .{ "__OBJC__", .keyword_objc },
@@ -1311,6 +1321,11 @@ pub fn next(self: *Tokenizer) Token {
                 '/' => state = .slash,
                 '&' => state = .ampersand,
                 '#' => state = .hash,
+                '@' => {
+                    id = .at;
+                    self.index += 1;
+                    break;
+                },
                 '0'...'9' => state = .pp_num,
                 '\t', '\x0B', '\x0C', ' ' => state = .whitespace,
                 '$' => if (self.langopts.dollars_in_identifiers) {

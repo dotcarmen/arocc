@@ -1027,6 +1027,7 @@ fn nextExternDecl(p: *Parser) void {
             .keyword_typeof_unqual,
             .keyword_extension,
             .keyword_bit_int,
+            .at,
             => if (parens == 0) return,
             .keyword_pragma => p.skipToPragmaSentinel(),
             .eof => return,
@@ -1077,6 +1078,7 @@ fn typedefDefined(p: *Parser, name: StringId, ty: QualType) void {
 ///  : declSpec (initDeclarator ( ',' initDeclarator)*)? ';'
 ///  | declSpec declarator decl* compoundStmt
 fn decl(p: *Parser) Error!bool {
+    if (try p.objcDecl()) return true;
     const gpa = p.comp.gpa;
     _ = try p.pragma();
     const first_tok = p.tok_i;
@@ -1468,6 +1470,49 @@ fn decl(p: *Parser) Error!bool {
     }
 
     _ = try p.expectToken(.semicolon);
+    return true;
+}
+
+/// objcDecl
+///   : '@' 'class' IDENTIFIER ';'
+fn objcDecl(p: *Parser) !bool {
+    const at = p.eatToken(.at) orelse return false;
+    if (!p.comp.langopts.objective_c) try p.err(at, .objc_not_enabled, .{});
+
+    if (p.eatToken(.keyword_class)) |_| {
+        const name = try p.expectIdentifier();
+        _ = try p.expectToken(.semicolon);
+
+        const node = try p.addNode(.{ .objc_class_forward_decl = .{
+            .name = name,
+        } });
+
+        const name_slice = p.tokSlice(name);
+        const interned_name = try p.comp.internString(name_slice);
+
+        const qt: QualType = if (try p.syms.findTypedef(p, interned_name, name, false)) |prev|
+            switch (prev.qt.type(p.comp)) {
+                .objc_class => prev.qt,
+                else => qt: {
+                    try p.err(name, .objc_type_decl_conflicts_with_defined_type, .{ "class", name_slice });
+                    try p.err(prev.tok, .type_defined_here, .{});
+                    break :qt .invalid;
+                },
+            }
+        else
+            try p.comp.type_store.put(
+                p.comp.gpa,
+                .{ .objc_class = .{
+                    .name = interned_name,
+                } },
+            );
+
+        try p.syms.defineTypedef(p, interned_name, qt, name, node);
+    } else {
+        try p.err(p.tok_i, .unexpected_objc_directive, .{});
+        return false;
+    }
+
     return true;
 }
 
