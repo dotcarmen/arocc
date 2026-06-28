@@ -3131,8 +3131,10 @@ pub fn isLvalExtra(tree: *const Tree, node: Node.Index, extra: *LvalExtra) bool 
     var cur_node = node;
     switch (cur_node.get(tree)) {
         .block_capture_ref_expr => |capture| {
-            _ = capture;
             extra.block_capture_kind = .by_val;
+            if (tree.attr_map.getAttribute(capture.decl, .blocks)) |attr| {
+                if (attr.args.blocks == .byref) extra.block_capture_kind = .by_ref;
+            }
             return true;
         },
         .compound_literal_expr => |literal| {
@@ -3244,7 +3246,7 @@ fn dumpAttribute(tree: *const Tree, ref: Attribute.Map.Ref, w: *std.Io.Writer) !
     return;
 }
 
-fn dumpNode(
+pub fn dumpNode(
     tree: *const Tree,
     node_index: Node.Index,
     level: u32,

@@ -52,14 +52,17 @@ pub const Args = union(enum) {
         alignment: ?u32,
         offset: ?u32 = null,
     },
-    blocks: struct {
-        capture: enum {
-            byref,
+    blocks: enum {
+        const BlocksAttr = @This();
 
-            pub const opts = struct {
-                const enum_kind = .identifier;
-            };
-        },
+        byref,
+
+        pub const opts = struct {
+            pub const enum_kind = .identifier;
+            pub const map: std.StaticStringMap(BlocksAttr) = .initComptime(.{
+                .{ "byref", .byref },
+            });
+        };
     },
     cleanup: struct {
         function: Tree.Node.Index,
@@ -473,6 +476,7 @@ pub const Namespaced = union(enum) {
         always_inline,
         arm_sve_vector_bits,
         availability,
+        blocks,
         ext_vector_type,
         internal_linkage,
         matrix_type,
@@ -624,6 +628,10 @@ pub const Namespaced = union(enum) {
         return switch (n) {
             .gnu => |gnu_attr| switch (gnu_attr) {
                 .access, .mode, .format => true,
+                else => false,
+            },
+            .clang => |clang_attr| switch (clang_attr) {
+                .blocks => true,
                 else => false,
             },
             .declspec => |declspec_attr| switch (declspec_attr) {

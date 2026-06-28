@@ -168,13 +168,13 @@ func: struct {
     decl: Node.OptIndex = .null,
 } = .{},
 
-/// null if not in Block literal
-block: ?struct {
-    caret: TokenIndex,
-    return_type: ?QualType = null,
-    scope_depth: usize,
-    noreturn: bool = false,
-} = null,
+block: struct {
+    /// `.null` if not in Block literal.
+    /// When parsing block literal signature, this is `.empty_decl`.
+    /// When parsing block literal body, this is `.block`, but the `qt` is a `.func`
+    node: Node.OptIndex = .null,
+    scope_depth: usize = undefined,
+} = .{},
 
 /// Various variables that are different for each record.
 record: struct {
@@ -5724,27 +5724,29 @@ fn compoundStmt(p: *Parser, is_fn_body: bool, stmt_expr_state: ?*StmtExprState) 
         else
             p.nodeIsNoreturn(p.decl_buf.items[p.decl_buf.items.len - 1]);
 
-        if (p.block) |*block| {
-            if (block.return_type) |ret_qt| {
-                if (last_noreturn != .yes) {
-                    if (last_noreturn == .no) switch (ret_qt.base(p.comp).type) {
-                        .void => {},
-                        .func, .array => {}, // Invalid, error reported elsewhere
-                        else => {
-                            try p.err(r_brace, .non_void_block_does_not_return, .{});
-                            try p.err(block.caret, .block_return_block_defined_here, .{});
-                        },
-                    };
+        if (p.block.node.unpack()) |block_node| {
+            const block = block_node.get(&p.tree).block_literal;
+            var func_ty = block.qt.get(p.comp, .func).?;
+            const ret_qt = func_ty.return_type;
+            if (ret_qt.isBlockLiteralAutoReturn()) {
+                func_ty.return_type = .void;
+                try block.qt.set(p.comp, .{ .func = func_ty });
+            } else if (last_noreturn != .yes) {
+                if (last_noreturn == .no) switch (ret_qt.base(p.comp).type) {
+                    .void => {},
+                    .func, .array => {}, // Invalid, error reported elsewhere
+                    else => {
+                        try p.err(r_brace, .non_void_block_does_not_return, .{});
+                        try p.err(block.caret, .block_return_block_defined_here, .{});
+                    },
+                };
 
-                    const implicit_ret = try p.addNode(.{ .return_stmt = .{
-                        .return_tok = r_brace,
-                        .return_qt = ret_qt,
-                        .operand = .{ .implicit = false },
-                    } });
-                    try p.decl_buf.append(gpa, implicit_ret);
-                }
-            } else {
-                block.return_type = .void;
+                const implicit_ret = try p.addNode(.{ .return_stmt = .{
+                    .return_tok = r_brace,
+                    .return_qt = ret_qt,
+                    .operand = .{ .implicit = false },
+                } });
+                try p.decl_buf.append(gpa, implicit_ret);
             }
         } else {
             const ret_qt: QualType = if (p.func.qt.?.get(p.comp, .func)) |func_ty| func_ty.return_type else .invalid;
@@ -5924,31 +5926,34 @@ fn returnStmt(p: *Parser) Error!?Node.Index {
     var ret_expr = try p.expr();
     _ = try p.expectToken(.semicolon);
 
-    const ret_qt: QualType = if (p.block) |*block| ret_qt: {
-        if (block.noreturn) {
+    const ret_qt: QualType = if (p.block.node.unpack()) |block_node| ret_qt: {
+        const block = block_node.get(&p.tree).block_literal;
+        var func = block.qt.get(p.comp, .func).?;
+
+        if (p.tree.attr_map.hasAttribute(block_node, .noreturn)) {
             try p.err(ret_tok, .invalid_block_noreturn, .{});
             try p.err(block.caret, .invalid_block_noreturn_block_defined_here, .{});
         }
 
-        if (block.return_type) |ret_qt| {
-            if (ret_expr) |*some| {
-                if (ret_qt.is(p.comp, .void)) {
-                    if (!some.qt.is(p.comp, .void)) {
-                        try p.err(ret_tok, .void_block_returns_value, .{});
-                        try p.err(block.caret, .block_return_block_defined_here, .{});
-                    }
-                } else {
-                    try some.coerce(p, ret_qt, e_tok, .ret);
-                    try some.saveValue(p);
+        if (func.return_type.isBlockLiteralAutoReturn()) {
+            func.return_type = if (ret_expr) |some| some.qt else .void;
+            try block.qt.set(p.comp, .{ .func = func });
+        } else if (ret_expr) |*some| {
+            if (func.return_type.is(p.comp, .void)) {
+                if (!some.qt.is(p.comp, .void)) {
+                    try p.err(ret_tok, .void_block_returns_value, .{});
+                    try p.err(block.caret, .block_return_block_defined_here, .{});
                 }
-            } else if (!ret_qt.is(p.comp, .void)) {
-                try p.err(ret_tok, .block_should_return, .{});
-                try p.err(block.caret, .block_return_block_defined_here, .{});
+            } else {
+                try some.coerce(p, func.return_type, e_tok, .ret);
+                try some.saveValue(p);
             }
-        } else {
-            block.return_type = if (ret_expr) |*some| some.qt else .void;
+        } else if (!func.return_type.is(p.comp, .void)) {
+            try p.err(ret_tok, .block_should_return, .{});
+            try p.err(block.caret, .block_return_block_defined_here, .{});
         }
-        break :ret_qt block.return_type.?;
+
+        break :ret_qt func.return_type;
     } else if (p.func.qt) |func_qt| ret_qt: {
         const ret_qt: QualType = if (func_qt.get(p.comp, .func)) |func_ty| func_ty.return_type else .invalid;
         const ret_void = !ret_qt.isInvalid() and ret_qt.is(p.comp, .void);
@@ -9551,7 +9556,6 @@ fn suffixExpr(p: *Parser, lhs: Result) Error!?Result {
             }
             if (extra.block_capture_kind == .by_val)
                 try p.err(p.tok_i, .variable_missing_block_type_spec, .{});
-
             if (operand.qt.get(p.comp, .pointer)) |pointer| {
                 try p.checkPtrArithmeticAllowed(pointer, p.tok_i, operand.node);
             }
@@ -10296,23 +10300,45 @@ fn blockLiteral(p: *Parser) Error!?Result {
     if (!p.comp.langopts.blocks) try p.err(caret, .blocks_not_enabled, .{});
     try p.err(caret, .blocks_are_clang_extension, .{});
 
-    p.block = .{ .caret = caret, .scope_depth = p.syms.active_len };
+    const node = try p.addNode(.{ .empty_decl = .{ .semicolon = caret } });
+    p.block = .{ .node = .pack(node), .scope_depth = p.syms.active_len };
+
     try p.syms.pushScope(p);
     defer p.syms.popScope();
 
-    var maybe_ret_builder: TypeStore.Builder = .{ .parser = p };
-    if (try p.typeSpec(&maybe_ret_builder)) {
-        p.block.?.return_type = try maybe_ret_builder.finish();
+    const attr_state = p.wip_attrs.state(true);
+    defer p.wip_attrs.restore(attr_state);
+    try p.attributeSpecifier();
+
+    var qt: QualType = undefined;
+    if (try p.typeName()) |typename| {
+        if (typename.is(p.comp, .func)) {
+            qt = typename;
+        } else {
+            qt = try p.comp.type_store.put(p.comp.gpa, .{ .func = .{
+                .return_type = typename,
+                .kind = .normal,
+                .params = &.{},
+            } });
+        }
+    } else {
+        var params: []const Type.Func.Param = &.{};
+        var is_variadic = false;
+        if (p.eatToken(.l_paren)) |l_paren| {
+            params = try p.paramDecls() orelse &.{};
+            is_variadic = p.eatToken(.ellipsis) != null;
+            try p.expectClosing(l_paren, .r_paren);
+        }
+        qt = try p.comp.type_store.put(p.comp.gpa, .{ .func = .{
+            .return_type = .block_literal_auto_return,
+            .kind = if (is_variadic) .variadic else .normal,
+            .params = params,
+        } });
     }
 
-    const params: []const Type.Func.Param, const is_variadic: bool = if (p.eatToken(.l_paren)) |l_paren| params: {
-        const params = try p.paramDecls();
-        const is_variadic = p.eatToken(.ellipsis) != null;
-        try p.expectClosing(l_paren, .r_paren);
-        break :params .{ params orelse &.{}, is_variadic };
-    } else .{ &.{}, false };
+    var func = qt.get(p.comp, .func).?;
 
-    for (params) |param| {
+    for (func.params) |param| {
         try p.syms.define(p.comp.gpa, .{
             .kind = .def,
             .name = param.name,
@@ -10323,6 +10349,13 @@ fn blockLiteral(p: *Parser) Error!?Result {
         });
     }
 
+    try p.tree.setNode(.{ .block_literal = .{
+        .caret = caret,
+        .qt = qt,
+        .body = undefined,
+    } }, @intFromEnum(node));
+    try p.wip_attrs.applyDeclAttrsExtra(p, node, qt, .null);
+
     var compound_stmt_state: StmtExprState = .{};
     const body = try p.compoundStmt(true, &compound_stmt_state) orelse {
         try p.err(p.tok_i, .missing_block_literal_body, .{});
@@ -10330,24 +10363,24 @@ fn blockLiteral(p: *Parser) Error!?Result {
         unreachable;
     };
 
-    const block_func_type = try p.comp.type_store.put(p.comp.gpa, .{ .func = .{
-        .return_type = p.block.?.return_type orelse .void,
-        .kind = if (is_variadic) .variadic else .normal,
-        .params = params,
-    } });
-    const block_type = try p.comp.type_store.put(p.comp.gpa, .{ .block = .{
-        .func = block_func_type,
-    } });
+    // could have been updated by returnStmt
+    func = qt.get(p.comp, .func).?;
+    if (func.return_type.isBlockLiteralAutoReturn()) {
+        func.return_type = .void;
+        try qt.set(p.comp, .{ .func = func });
+    }
 
-    const node = try p.addNode(.{ .block_literal = .{
+    const block_qt = try p.comp.type_store.put(p.comp.gpa, .{ .block = .{ .func = qt } });
+
+    try p.tree.setNode(.{ .block_literal = .{
         .caret = caret,
         .body = body,
-        .qt = block_type,
-    } });
+        .qt = block_qt,
+    } }, @intFromEnum(node));
 
     return .{
         .node = node,
-        .qt = block_type,
+        .qt = block_qt,
         .val = try .block(@intFromEnum(node), p.comp),
     };
 }
@@ -10399,16 +10432,15 @@ fn primaryExpr(p: *Parser) Error!?Result {
                     try p.err(name_tok, .out_of_scope_use, .{name});
                     try p.err(lookup.symbol.tok, .previous_definition, .{});
                 }
-
                 const decl_node = lookup.symbol.node.unpack().?;
                 try p.checkDeprecatedUnavailable(decl_node, name_tok);
 
-                if (p.block) |block| {
+                if (p.block.node != .null) {
                     const is_capturable = switch (lookup.symbol.kind) {
                         .decl, .def => true,
                         else => false,
                     };
-                    if (is_capturable and lookup.depth > 0 and lookup.depth < block.scope_depth) {
+                    if (is_capturable and lookup.depth > 0 and lookup.depth < p.block.scope_depth) {
                         return .{
                             .val = lookup.symbol.val,
                             .qt = lookup.symbol.qt,

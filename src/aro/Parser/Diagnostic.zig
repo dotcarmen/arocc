@@ -2428,13 +2428,3 @@ pub const variable_missing_block_type_spec: Diagnostic = .{
     .fmt = "variable is not assignable (missing __block type specifier)",
     .kind = .@"error",
 };
-
-pub const block_attribute_not_allowed: Diagnostic = .{
-    .fmt = "__block attribute not allowed, only allowed on local variables",
-    .kind = .@"error",
-};
-
-pub const block_only_gnu_attributes: Diagnostic = .{
-    .fmt = "only gnu attributes are allowed on block literals",
-    .kind = .@"error",
-};
