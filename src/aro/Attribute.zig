@@ -52,6 +52,15 @@ pub const Args = union(enum) {
         alignment: ?u32,
         offset: ?u32 = null,
     },
+    blocks: struct {
+        capture: enum {
+            byref,
+
+            pub const opts = struct {
+                const enum_kind = .identifier;
+            };
+        },
+    },
     cleanup: struct {
         function: Tree.Node.Index,
     },
